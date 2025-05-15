@@ -853,7 +853,6 @@ export class Pipefy implements INodeType {
 				typeOptions: {
 					multipleValues: false,
 					loadOptionsMethod: 'getPipeFields',
-					loadOptionsDependsOn: ['pipeId'],
 				},
 			},
 		],
