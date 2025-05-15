@@ -1,6 +1,6 @@
 {
-  "name": "n8n-nodes-pipefy-enhanced",
-  "version": "0.1.0",
+  "name": "@tencologia1-spb/n8n-nodes-pipefy-tools",
+  "version": "1.0.0",
   "description": "n8n node for Pipefy API integration with enhanced features",
   "keywords": [
     "n8n-community-node-package",

@@ -5,6 +5,7 @@ import {
 	INodeTypeDescription,
 	NodeOperationError,
 	INodeProperties,
+	INodePropertyOptions,
 } from 'n8n-workflow';
 
 import { OptionsWithUri } from 'request-promise-native';
@@ -818,11 +819,15 @@ export class Pipefy implements INodeType {
 						displayName: 'Field',
 						values: [
 							{
-								displayName: 'Field ID',
+								displayName: 'Pipe Field',
 								name: 'fieldId',
-								type: 'string',
+								type: 'options',
 								default: '',
-								description: 'ID of the field to set value for',
+								required: true,
+								description: 'Select the Pipefy field to set. Required fields are marked with *.',
+								typeOptions: {
+									loadOptionsMethod: 'getPipeFieldOptionsForSelect',
+								},
 							},
 							{
 								displayName: 'Field Value',
@@ -846,7 +851,6 @@ export class Pipefy implements INodeType {
 					show: {
 						resource: ['card'],
 						operation: ['create'],
-						pipeId: [{ $exists: true, $ne: '' }], // Mostrar apenas se pipeId estiver preenchido
 					},
 				},
 				typeOptions: {
@@ -876,8 +880,8 @@ export class Pipefy implements INodeType {
 	//
 	//###########################################################################
 
-	async getPipes(this: IExecuteFunctions): Promise<INodeProperties[]> {
-		const returnData: INodeProperties[] = [];
+	async getPipes(this: IExecuteFunctions): Promise<INodePropertyOptions[]> {
+		const returnData: INodePropertyOptions[] = [];
 		const query = `
 			query {
 				me {
@@ -1067,6 +1071,68 @@ export class Pipefy implements INodeType {
 		}
 
 		return returnProperties;
+	}
+
+	async getPipeFieldOptionsForSelect(this: IExecuteFunctions): Promise<INodePropertyOptions[]> {
+		const pipeId = this.getNodeParameter('pipeId', 0, '') as string;
+		const options: INodePropertyOptions[] = [];
+
+		if (!pipeId) {
+			// Retorna uma opção placeholder se nenhum pipeId estiver selecionado
+			// Isso pode não ser ideal aqui, pois o campo só aparecerá se um pipeId estiver selecionado
+			// mas é uma salvaguarda.
+			options.push({ name: 'Select a Pipe ID first', value: '' });
+			return options;
+		}
+
+		const query = `
+			query {
+				pipe(id: "${pipeId}") {
+					fields {
+						id
+						label
+						required
+					}
+				}
+			}
+		`;
+
+		const requestOptions: OptionsWithUri = {
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			method: 'POST',
+			body: {
+				query,
+			},
+			uri: 'https://api.pipefy.com/graphql',
+			json: true,
+		};
+
+		const credentials = await this.getCredentials('pipefyApi');
+		// @ts-ignore
+		const responseData = await this.helpers.requestPromise(requestOptions, { credentials });
+
+		if (responseData && responseData.data && responseData.data.pipe && responseData.data.pipe.fields) {
+			const fields = responseData.data.pipe.fields;
+			for (const field of fields) {
+				options.push({
+					name: field.required ? `${field.label} *` : field.label,
+					value: field.id,
+				});
+			}
+		} else {
+			options.push({ name: 'Could not load fields or no fields found', value: '_error' });
+		}
+
+		// Ordenar para melhor UX
+		options.sort((a, b) => {
+			if (a.name < b.name) return -1;
+			if (a.name > b.name) return 1;
+			return 0;
+		});
+
+		return options;
 	}
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
