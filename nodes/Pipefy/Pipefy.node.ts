@@ -770,7 +770,7 @@ export class Pipefy implements INodeType {
 						],
 					},
 				},
-				description: 'Enter the ID of the Pipe where the card will be created.',
+				description: 'ID do Pipe onde o cartão será criado. Entre com o ID numérico do pipe (ex: 301397126)',
 			},
 			{
 				displayName: 'Title',
@@ -788,10 +788,28 @@ export class Pipefy implements INodeType {
 						],
 					},
 				},
-				description: 'Title of the card to create',
+				description: 'Título do cartão a ser criado',
 			},
 			{
-				displayName: 'Fields',
+				displayName: 'Due Date',
+				name: 'dueDate',
+				type: 'dateTime',
+				default: '',
+				required: false,
+				displayOptions: {
+					show: {
+						resource: [
+							'card',
+						],
+						operation: [
+							'create',
+						],
+					},
+				},
+				description: 'Data de vencimento do cartão (opcional)',
+			},
+			{
+				displayName: 'Card Fields',
 				name: 'fieldsUi',
 				placeholder: 'Add Field',
 				type: 'fixedCollection',
@@ -815,44 +833,63 @@ export class Pipefy implements INodeType {
 						displayName: 'Field',
 						values: [
 							{
-								displayName: 'Pipe Field',
+								displayName: 'Field ID',
 								name: 'fieldId',
-								type: 'options',
+								type: 'string',
 								default: '',
 								required: true,
-								description: 'Select the Pipefy field to set. Required fields are marked with *.',
-								typeOptions: {
-									loadOptionsMethod: 'getPipeFieldOptionsForSelect',
-								},
+								description: 'ID do campo no Pipefy. Para obter os campos disponíveis, use a consulta: pipe(id:"SEU_PIPE_ID") { start_form_fields { id, label } }',
 							},
 							{
 								displayName: 'Field Value',
 								name: 'fieldValue',
 								type: 'string',
 								default: '',
-								description: 'Value to set for the field',
+								description: 'Valor para o campo',
 							},
 						],
 					},
 				],
 			},
-			// Novo campo para exibir os campos do Pipe dinamicamente
 			{
-				displayName: 'Pipe Fields',
-				name: 'pipeFields',
+				displayName: 'Opções Adicionais',
+				name: 'additionalOptions',
 				type: 'collection',
-				placeholder: 'Load Pipe Fields',
+				placeholder: 'Adicionar Opção',
 				default: {},
 				displayOptions: {
 					show: {
-						resource: ['card'],
-						operation: ['create'],
+						resource: [
+							'card',
+						],
+						operation: [
+							'create',
+						],
 					},
 				},
-				typeOptions: {
-					multipleValues: false,
-					loadOptionsMethod: 'getPipeFields',
-				},
+				options: [
+					{
+						displayName: 'Assignee IDs',
+						name: 'assigneeIds',
+						type: 'string',
+						default: '',
+						description: 'IDs dos usuários para atribuir ao cartão, separados por vírgula',
+					},
+					{
+						displayName: 'Parent Cards IDs',
+						name: 'parentIds',
+						type: 'string',
+						default: '',
+						description: 'IDs dos cartões pai, separados por vírgula',
+					},
+					{
+						displayName: 'Label IDs',
+						name: 'labelIds',
+						type: 'string',
+						default: '',
+						description: 'IDs das etiquetas, separados por vírgula',
+					},
+				],
 			},
 		],
 	};
@@ -1339,59 +1376,108 @@ export class Pipefy implements INodeType {
 					} else if (operation === 'create') {
 						const pipeId = this.getNodeParameter('pipeId', i) as string;
 						const title = this.getNodeParameter('title', i) as string;
-						const dynamicPipeFields = this.getNodeParameter('pipeFields', i, {}) as IDataObject; // Obter os campos dinâmicos
-
-						let fieldsAttributesArray: string[] = [];
-
-						// Processar os campos dinâmicos de pipeFields
-						if (dynamicPipeFields && Object.keys(dynamicPipeFields).length > 0) {
-							for (const fieldId in dynamicPipeFields) {
-								if (Object.prototype.hasOwnProperty.call(dynamicPipeFields, fieldId)) {
-									const fieldValue = dynamicPipeFields[fieldId];
-									// Certifique-se de que o valor é uma string e escapa aspas duplas se necessário para GraphQL
-									const formattedValue = typeof fieldValue === 'string' ? fieldValue.replace(/"/g, '\\"') : fieldValue;
-									// Lógica para formatar diferentes tipos de valor (ex: array para checklist)
-									// Por agora, vamos assumir que são strings ou números que podem ser colocados diretamente
-									if (fieldValue !== null && fieldValue !== undefined && fieldValue !== '') { // Apenas incluir campos com valor
-										// Se o valor for um array (ex: para campos de múltipla escolha ou checklist do Pipefy),
-										// formate-o como um array de strings JSON.
-										if (Array.isArray(fieldValue)) {
-											const arrayValues = fieldValue.map(val => `"${String(val).replace(/"/g, '\\"' )}"`).join(', ');
-											fieldsAttributesArray.push(`{field_id: "${fieldId}", value: [${arrayValues}]}`);
-										} else {
-											fieldsAttributesArray.push(`{field_id: "${fieldId}", value: "${formattedValue}"}`);
-										}
-									}
-								}
-							}
-						} else {
-							// Fallback para fieldsUi se pipeFields estiver vazio (manter lógica original como exemplo)
-							const fieldsUi = this.getNodeParameter('fieldsUi', i, {}) as IDataObject;
-							if (fieldsUi && fieldsUi.fieldValues && (fieldsUi.fieldValues as IDataObject[]).length > 0) {
-								fieldsAttributesArray = (fieldsUi.fieldValues as IDataObject[]).map(fv => {
-									const formattedValue = typeof fv.fieldValue === 'string' ? fv.fieldValue.replace(/"/g, '\\"') : fv.fieldValue;
-									// Adicionar checagem para valor não ser vazio/nulo/undefined
-									if (fv.fieldValue !== null && fv.fieldValue !== undefined && fv.fieldValue !== '') {
-										return `{field_id: "${fv.fieldId}", value: "${formattedValue}"}`;
-									}
-									return null; // Ignorar campos sem valor
-								}).filter(fv => fv !== null) as string[];
+						const dueDate = this.getNodeParameter('dueDate', i, '') as string;
+						const fieldsUi = this.getNodeParameter('fieldsUi', i, {}) as IDataObject;
+						const additionalOptions = this.getNodeParameter('additionalOptions', i, {}) as IDataObject;
+						
+						// Prepare fields_attributes array
+						const fieldsAttributesArray: string[] = [];
+						
+						if (fieldsUi && fieldsUi.fieldValues && (fieldsUi.fieldValues as IDataObject[]).length > 0) {
+							fieldsAttributesArray.push(...(fieldsUi.fieldValues as IDataObject[])
+								.filter(field => field.fieldId && field.fieldValue)
+								.map(field => {
+									const fieldId = field.fieldId as string;
+									const fieldValue = field.fieldValue as string;
+									return `{field_id: "${fieldId}", field_value: "${fieldValue.replace(/"/g, '\\"')}"}`;
+								}));
+						}
+						
+						// Prepare additional options
+						let assigneesInput = '';
+						if (additionalOptions.assigneeIds) {
+							const assigneeIdsArray = (additionalOptions.assigneeIds as string)
+								.split(',')
+								.map(id => id.trim())
+								.filter(id => id)
+								.map(id => `"${id}"`)
+								.join(', ');
+							
+							if (assigneeIdsArray) {
+								assigneesInput = `assignee_ids: [${assigneeIdsArray}]`;
 							}
 						}
-
-						const fieldsAttributesString = fieldsAttributesArray.length > 0 ? `fields_attributes: [${fieldsAttributesArray.join(', ')}]` : '';
-
+						
+						let parentInput = '';
+						if (additionalOptions.parentIds) {
+							const parentIdsArray = (additionalOptions.parentIds as string)
+								.split(',')
+								.map(id => id.trim())
+								.filter(id => id)
+								.map(id => `"${id}"`)
+								.join(', ');
+							
+							if (parentIdsArray) {
+								parentInput = `parent_ids: [${parentIdsArray}]`;
+							}
+						}
+						
+						let labelInput = '';
+						if (additionalOptions.labelIds) {
+							const labelIdsArray = (additionalOptions.labelIds as string)
+								.split(',')
+								.map(id => id.trim())
+								.filter(id => id)
+								.map(id => `"${id}"`)
+								.join(', ');
+							
+							if (labelIdsArray) {
+								labelInput = `label_ids: [${labelIdsArray}]`;
+							}
+						}
+						
+						// Build the GraphQL mutation
+						const dueDateInput = dueDate ? `due_date: "${dueDate}"` : '';
+						const fieldsAttributesInput = fieldsAttributesArray.length > 0 
+							? `fields_attributes: [${fieldsAttributesArray.join(', ')}]` 
+							: '';
+						
+						// Build the mutation, including only non-empty values
 						query = `
 							mutation {
 								createCard(input: {
 									pipe_id: "${pipeId}",
-									title: "${title}",
-									${fieldsAttributesString}
+									title: "${title.replace(/"/g, '\\"')}"
+									${dueDateInput ? `, ${dueDateInput}` : ''}
+									${fieldsAttributesInput ? `, ${fieldsAttributesInput}` : ''}
+									${assigneesInput ? `, ${assigneesInput}` : ''}
+									${parentInput ? `, ${parentInput}` : ''}
+									${labelInput ? `, ${labelInput}` : ''}
 								}) {
 									card {
 										id
 										title
 										url
+										createdAt
+										due_date
+										current_phase {
+											id
+											name
+										}
+										assignees {
+											id
+											name
+											email
+										}
+										labels {
+											id
+											name
+											color
+										}
+										fields {
+											name
+											value
+										}
 									}
 								}
 							}
