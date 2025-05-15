@@ -851,22 +851,10 @@ export class Pipefy implements INodeType {
 					},
 				},
 				typeOptions: {
-					multipleValues: false, // Cada campo do pipe é uma entrada separada na UI
+					multipleValues: false,
 					loadOptionsMethod: 'getPipeFields',
 					loadOptionsDependsOn: ['pipeId'],
 				},
-				// As 'options' aqui serão populadas dinamicamente por getPipeFields
-				// Esta definição estática é apenas um placeholder ou pode ser omitida
-				// se loadOptionsMethod sempre fornecer a estrutura completa.
-				options: [
-					{
-						displayName: 'Field Name (Dynamically Loaded)',
-						name: 'fieldName',
-						type: 'string',
-						default: '',
-						description: 'This will be replaced by actual pipe fields.',
-					},
-				],
 			},
 		],
 	};
