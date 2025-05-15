@@ -1,0 +1,33 @@
+# source
+credentials/**/*
+!credentials/**/*.js
+nodes/**/*
+!nodes/**/*.js
+!nodes/**/*.svg
+
+# development
+.eslintrc.js
+.eslintrc.prepublish.js
+.eslintignore
+.git*
+.nvm-version
+.prettierrc.js
+gulpfile.js
+index.ts
+jest.config.js
+tsconfig.json
+webpack.config.js
+
+# testing
+test
+__mocks__
+.githooks
+
+# misc
+.DS_Store
+.idea
+.vscode
+images
+node_modules
+*.log
+*.postman_collection.json
