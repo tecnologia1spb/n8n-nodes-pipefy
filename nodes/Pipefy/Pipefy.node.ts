@@ -758,12 +758,9 @@ export class Pipefy implements INodeType {
 			{
 				displayName: 'Pipe ID',
 				name: 'pipeId',
-				type: 'options',
+				type: 'string',
 				default: '',
 				required: true,
-				typeOptions: {
-					loadOptionsMethod: 'getPipes',
-				},
 				displayOptions: {
 					show: {
 						resource: [
@@ -774,7 +771,7 @@ export class Pipefy implements INodeType {
 						],
 					},
 				},
-				description: 'ID of the pipe to create card in. Choose from the list.',
+				description: 'Enter the ID of the Pipe where the card will be created.',
 			},
 			{
 				displayName: 'Title',
