@@ -4,7 +4,6 @@ import {
 	INodeType,
 	INodeTypeDescription,
 	NodeOperationError,
-	INodeProperties,
 	INodePropertyOptions,
 } from 'n8n-workflow';
 
@@ -928,21 +927,19 @@ export class Pipefy implements INodeType {
 		return returnData;
 	}
 
-	async getPipeFields(this: IExecuteFunctions): Promise<INodeProperties[]> {
+	async getPipeFields(this: IExecuteFunctions): Promise<INodePropertyOptions[]> {
 		const pipeId = this.getNodeParameter('pipeId', 0, '') as string;
 		if (!pipeId) {
 			// Não há pipeId selecionado, retorna um campo placeholder ou vazio
 			return [
 				{
-					displayName: 'Select a Pipe first to see its fields',
-					name: 'placeholderInfo',
-					type: 'notice',
-					default: '',
+					name: 'Select a Pipe first to see its fields',
+					value: '',
 				},
 			];
 		}
 
-		const returnProperties: INodeProperties[] = [];
+		const returnOptions: INodePropertyOptions[] = [];
 		const query = `
 			query {
 				pipe(id: "${pipeId}") {
@@ -979,82 +976,29 @@ export class Pipefy implements INodeType {
 			const fields = responseData.data.pipe.fields;
 
 			for (const field of fields) {
-				const fieldProperty: INodeProperties = {
-					displayName: field.required ? `${field.label} *` : field.label,
-					name: field.id, // Usar o ID do campo como 'name' para fácil mapeamento
-					default: '',
+				returnOptions.push({
+					name: field.required ? `${field.label} *` : field.label,
+					value: field.id,
 					description: field.description || field.help || '',
-					required: field.required,
-					type: 'string', // Tipo padrão, será ajustado abaixo
-				};
-
-				// Mapear tipos de campo do Pipefy para tipos de campo do n8n
-				// Esta é uma lista de exemplo, pode precisar de mais tipos
-				switch (field.type) {
-					case 'short_text':
-					case 'long_text':
-					case 'email':
-					case 'phone':
-					case 'url':
-						fieldProperty.type = 'string';
-						break;
-					case 'number':
-					case 'currency':
-						fieldProperty.type = 'number';
-						break;
-					case 'select':
-					case 'radio_vertical':
-					case 'radio_horizontal':
-						fieldProperty.type = 'options';
-						fieldProperty.options = field.options ? field.options.map((opt: string) => ({ name: opt, value: opt })) : [];
-						break;
-					case 'checkbox_vertical':
-					case 'checkbox_horizontal':
-						// Para múltiplos checkboxes, n8n pode usar uma coleção ou múltiplas booleans.
-						// Por simplicidade, vamos tratar como uma string de valores separados por vírgula ou boolean se for único.
-						// Uma melhoria seria criar múltiplos campos booleanos ou uma multi-select list.
-						if (field.options && field.options.length > 1) {
-							fieldProperty.type = 'string';
-							fieldProperty.description = `${fieldProperty.description} (Provide comma-separated values from: ${field.options.join(', ')})`;
-						} else if (field.options && field.options.length === 1) {
-							fieldProperty.type = 'boolean';
-							fieldProperty.displayName = field.required ? `${field.options[0]} *` : field.options[0]; // Usa a opção como nome
-							fieldProperty.default = false;
-						} else {
-							fieldProperty.type = 'boolean'; // Checkbox único sem opções especificadas? Default para boolean.
-							fieldProperty.default = false;
-						}
-						break;
-					case 'date':
-					case 'datetime':
-						fieldProperty.type = 'dateTime';
-						break;
-					case 'time':
-						fieldProperty.type = 'string'; // n8n não tem um tipo 'time' específico, usar string com placeholder
-						fieldProperty.placeholder = 'HH:MM:SS';
-						break;
-					case 'assignee_select':
-					case 'member_select': // Pode precisar carregar usuários/membros como opções
-						fieldProperty.type = 'string'; // Placeholder, idealmente seria um options carregado dinamicamente
-						fieldProperty.description = `${fieldProperty.description} (Enter User/Assignee ID(s))`;
-						break;
-					// Adicionar mais mapeamentos conforme necessário (attachment, etc.)
-					default:
-						fieldProperty.type = 'string';
-				}
-				returnProperties.push(fieldProperty);
+				});
 			}
 		} else {
 			// Erro ao buscar campos ou nenhum campo encontrado
-			returnProperties.push({
-				displayName: 'Error or No Fields Found',
-				name: 'errorInfo',
-					type: 'notice',
-					default: 'Could not load fields for the selected pipe. Check pipeId or API response.',
+			returnOptions.push({
+				name: 'Error or No Fields Found',
+				value: '_error',
+				description: 'Could not load fields for the selected pipe. Check pipeId or API response.',
 			});
 		}
 
-		return returnProperties;
+		// Ordenar para melhor UX
+		returnOptions.sort((a, b) => {
+			if (a.name < b.name) return -1;
+			if (a.name > b.name) return 1;
+			return 0;
+		});
+
+		return returnOptions;
 	}
 
 	async getPipeFieldOptionsForSelect(this: IExecuteFunctions): Promise<INodePropertyOptions[]> {
